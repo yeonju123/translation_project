@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 
 pd.set_option("display.max_colwidth", 200)
 
+# load parallel corpus
 def read_text(filename):
     file = open(filename, mode = "rt", encoding = "utf-8")
     text = file.read()
@@ -34,49 +35,53 @@ def to_lines(text):
     sents = [i.split("\t") for i in sents]
     return sents
 
-data = read_text("/users/yeonjulee/Downloads/en-fa.txt/OpenSubtitles.en-fa.en")
+data = read_text("/home/compling4/Desktop/ANLP_project-master/en-ko.txt/OpenSubtitles.en-ko.en")
 en = to_lines(data)
 en = array(en)
 
 en[1]
 
-data = read_text("/users/yeonjulee/Downloads/en-fa.txt/OpenSubtitles.en-fa.fa")
-fa = to_lines(data)
-fa = array(fa)
-fa[1]
+data = read_text("/home/compling4/Desktop/ANLP_project-master/en-ko.txt/OpenSubtitles.en-ko.ko")
+target = to_lines(data)
+target = array(target)
+target[1]
 
-en_fa = pd.DataFrame(en, columns = ["ENG"])
-en_fa.head()
-en_fa["PERR"] = fa
+# put each language file into a dataframe in a parallel way, separated by line.
 
-en_fa["ENG"] = en_fa["ENG"].str.lower()
+en_ta = pd.DataFrame(en, columns = ["ENG"])
+en_ta.head()
+en_ta["Target"] = target
 
-en_fa.head()
-en_fa["PERR"] = en_fa["PERR"].str.lower()
+en_ta["ENG"] = en_ta["ENG"].str.lower()
 
+en_ta.head()
+en_ta["Target"] = en_ta["Target"].str.lower()
+
+
+#get the length of each line for each language
 eng_l = []
-fa_l = []
+ta_l = []
 
-for i in en_fa["ENG"]:
+for i in en_ta["ENG"]:
     eng_l.append(len(i.split()))
 
-for i in en_fa["PERR"]:
-    fa_l.append(len(i.split()))
+for i in en_ta["Target"]:
+    ta_l.append(len(i.split()))
     
 
-en_fa["ENG_L"] = array(eng_l)
-en_fa["PERR_L"] = array(fa_l)
+en_ta["ENG_L"] = array(eng_l)
+en_ta["Target_L"] = array(ta_l)
 
-
-en_fa = shuffle(en_fa)
+# shuffle data
+en_ta = shuffle(en_ta)
 
 # data size is defined
-len(en_fa)
+len(en_ta)
 data_size = 50000
 train_size = int(data_size * 0.8)
-en_fa.iloc[0]
+en_ta.iloc[0]
 
-data_docs_cut = en_fa.iloc[:data_size +1]  #cut data into 10000
+data_docs_cut = en_ta.iloc[:data_size +1]  #cut data into 10000
 
 train_docs = data_docs_cut[:train_size]
 test_docs = data_docs_cut[train_size:]
@@ -89,24 +94,15 @@ def tokenization(lines):
     tokenizer.fit_on_texts(lines)
     return tokenizer
 
-#encoder 
+#encoder, vectorizing words with one-hot representation. Here, tokenizer is used to vectorize.
 def encode_sequences(tokenizer,length, lines):
     seq = tokenizer.texts_to_sequences(lines)
     seq = pad_sequences(seq, maxlen = length, padding = "post")
     return seq
 
-# this part has to be fixed re-shaping
-#def encode_output(sequences, vocab_size):
- #   ylist = list()
-  #  for sequence in sequences:
-   #     encoded = to_categorical(sequence, num_classes = vocab_size)
-    #    ylist.append(encoded)
-     #   y = array(ylist)
-      #  y = y.reshape(sequences.shape[0], sequences.shape[1])
-       # return y
-    
-# this part has to be fixed re-shaping
-        
+
+#build a model
+
 def build_model(in_vocab, out_vocab, in_timesteps, out_timesteps, n):
     model = Sequential()
     model.add(Embedding(in_vocab, n, input_length = in_timesteps,
@@ -117,20 +113,20 @@ def build_model(in_vocab, out_vocab, in_timesteps, out_timesteps, n):
     model.add(TimeDistributed(Dense(out_vocab, activation = "softmax")))
     return model
 
-
+# vectorizing both English and Target language of traning set.
 eng_tokenizer = tokenization(train_docs["ENG"])
 eng_vocab_size = len(eng_tokenizer.word_index)+1
-fa_tokenizer = tokenization(train_docs["PERR"])
-fa_vocab_size = len(fa_tokenizer.word_index)+1
+ta_tokenizer = tokenization(train_docs["Target"])
+ta_vocab_size = len(ta_tokenizer.word_index)+1
 eng_length = max_length(train_docs["ENG"]) #length of the longest sentence token
-fa_length = max_length(train_docs["PERR"])
+ta_length = max_length(train_docs["Target"])
 
 
 # this part has to be fixed re-shaping
 
 
 trainX = encode_sequences(eng_tokenizer, eng_length, train_docs["ENG"])
-trainY = encode_sequences(fa_tokenizer, fa_length, train_docs["PERR"])
+trainY = encode_sequences(ta_tokenizer, ta_length, train_docs["Target"])
 #reshpaing is not working now =====================================
 
 # this part has to be fixed re-shaping
@@ -139,17 +135,15 @@ trainY = encode_sequences(fa_tokenizer, fa_length, train_docs["PERR"])
 
 
 testX = encode_sequences(eng_tokenizer, eng_length, test_docs["ENG"])
-testY = encode_sequences(fa_tokenizer, fa_length, test_docs["PERR"])
+testY = encode_sequences(ta_tokenizer, ta_length, test_docs["Target"])
 
 
-
-
-model = build_model(eng_vocab_size, fa_vocab_size, eng_length, fa_length, 512 ) #512 hidden units 
+model = build_model(eng_vocab_size, ta_vocab_size, eng_length, ta_length, 512 ) #512 hidden units 
 rms = optimizers.RMSprop(lr = 0.001)
 
 model.compile(optimizer = rms, loss = "sparse_categorical_crossentropy")
 #model.compile(optimizer = "adam", loss = "categorical_crossentropy")
-filename = "model.en_fa_translater"
+filename = "model.en_target_translater"
 
 print(model.summary())
 
